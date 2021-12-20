@@ -40,7 +40,11 @@ func TestCount(t *testing.T) {
 	}
 
 	results := []util.Child{}
-	client.Run(c, children, results)
+	client.Run(c, children, &results)
+
+	if len(results) != len(children) {
+		t.Errorf("Incorrect number of children returned: %d != %d", len(results), len(children))
+	}
 
 	for c := range(results) {
 		child := results[c]

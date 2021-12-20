@@ -1,7 +1,7 @@
 package util
 
-var WorkshopHandler = "WorkshopOperations.Run"
-var WorkerHandler = "WorkerOperations.Worker"
+var SantaHandler = "SantaOperations.Run"
+var WorkshopHandler = "WorkshopOperations.Workshop"
 
 type Response struct {
 	ChildrenList  []Child

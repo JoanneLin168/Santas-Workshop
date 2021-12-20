@@ -36,6 +36,6 @@ func main() {
 	}
 
 	results := []util.Child{}
-	client2.Run(client, children, results)
+	client2.Run(client, children, &results)
 	fmt.Println(fmt.Sprintf("All %d children have received presents from Santa!", len(results)))
 }
