@@ -3,13 +3,13 @@ package main
 import (
 	"net/rpc"
 	"os"
-	"reflect"
 	"testing"
+	"time"
 	"workshop/client"
 	"workshop/util"
 )
 
-func TestCount(t *testing.T) {
+func TestTime(t *testing.T) {
 	os.Stdout = nil
 
 	// RPC dial to server - can only be tested locally due to IP address and time
@@ -39,26 +39,15 @@ func TestCount(t *testing.T) {
 	}
 
 	results := []util.Child{}
+	var th util.TimeHandler
+	th.SetStartTime()
 	client.Run(c, children, &results)
 
-	if len(results) != len(children) {
-		t.Errorf("Incorrect number of children returned: %d != %d", len(results), len(children))
+	duration := th.GetTime()
+	if duration < (6 * time.Second) {
+		t.Errorf("Duration too fast: %d", duration)
+	} else if duration > (7 * time.Second) {
+		t.Errorf("Duration too slow: %d", duration)
 	}
 
-	for c := range(results) {
-		child := results[c]
-		switch child.Behaviour {
-		case util.Good:
-			if !reflect.DeepEqual(child.Presents, child.WishList) {
-				t.Errorf("Incorrect number of presents for %s: %d != %d",
-					child.Name, len(child.Presents), len(child.WishList))
-			}
-		case util.Bad:
-			if !(len(child.Presents) == 1 && child.Presents[0].Type == util.Coal) {
-				t.Errorf("Incorrect number of presents for %s: %d != %d",
-					child.Name, len(child.Presents), 1)
-			}
-		}
-
-	}
 }
