@@ -7,14 +7,17 @@ import (
 	"net/rpc"
 	"time"
 	"workshop/util"
+	"github.com/ChrisGora/semaphore"
 )
 
 type WorkshopOperations struct {}
 
 var numOfElves = 8
+var semElves = semaphore.Init(2, 2)
 
 func elf (work []util.Child, ch chan []util.Child) {
 	// work is the children list passed from the workshop, completed is the children list with presents to return
+	semElves.Wait()
 	completed := []util.Child{}
 	for c := range(work) {
 		child := work[c]
@@ -28,6 +31,7 @@ func elf (work []util.Child, ch chan []util.Child) {
 		completed = append(completed, child)
 	}
 	ch <- completed
+	semElves.Post()
 }
 
 // Workshop - processes simulation of the workshop
@@ -58,12 +62,12 @@ func (workshop *WorkshopOperations) Workshop(req util.Request, res *util.Respons
 	childrenList := []util.Child{}
 	for i := range(elvesWithWork) {
 		index := elvesWithWork[i]
-		completed := <-elves[index]
-		childrenList = append(childrenList, completed...)
+		childrenList = append(childrenList, <-elves[index]...)
 	}
 
 	res.ChildrenList = childrenList
-	fmt.Println("Time:",th.GetTime(),"Completed work from Santa!")
+	fmt.Println("Time:",th.GetTime(),
+		fmt.Sprintf("Completed work from Santa for %d children!", len(res.ChildrenList)))
 
 	return
 }
