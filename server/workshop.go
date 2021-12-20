@@ -15,31 +15,34 @@ type WorkshopOperations struct {}
 
 var numOfElves = 8
 var semStorageRoom = semaphore.Init(2, 2)
-var mStorageRoom sync.Mutex
 var mTasks sync.Mutex
 
-func elf (childrenList *[]util.Child, ch chan util.Child) {
+func elf (id int, childrenList *[]util.Child, ch chan util.Child) {
 	// Only one elf can access childrenList at a time to prevent any race conditions
-	mTasks.Lock()
-	if len(*childrenList) > 0 {
-		child := (*childrenList)[0]
-		*childrenList = (*childrenList)[1:]
-		mTasks.Unlock()
+	for {
+		mTasks.Lock()
+		if len(*childrenList) > 0 {
+			child := (*childrenList)[0]
+			*childrenList = (*childrenList)[1:]
+			mTasks.Unlock()
 
-		semStorageRoom.Wait()
-		if child.Behaviour == util.Good {
-			time.Sleep(3 * time.Second)
-			child.Presents = child.WishList
+			semStorageRoom.Wait()
+			if child.Behaviour == util.Good {
+				time.Sleep(3 * time.Second)
+				child.Presents = child.WishList
+			} else {
+				time.Sleep(1 * time.Second)
+				child.Presents = append(child.Presents, util.Present{Type: util.Coal})
+			}
+
+			ch <- child
+			semStorageRoom.Post()
 		} else {
-			time.Sleep(1 * time.Second)
-			child.Presents = append(child.Presents, util.Present{Type: util.Coal})
+			mTasks.Unlock()
+			break
 		}
-
-		ch <- child
-		semStorageRoom.Post()
-	} else {
-		mTasks.Unlock()
 	}
+
 }
 
 // Workshop - processes simulation of the workshop
@@ -57,7 +60,7 @@ func (workshop *WorkshopOperations) Workshop(req util.Request, res *util.Respons
 	}
 
 	for i := range(elves) {
-		go elf(&req.ChildrenList, elves[i])
+		go elf(i, &req.ChildrenList, elves[i])
 	}
 
 	childrenList := []util.Child{}
@@ -86,10 +89,6 @@ func (workshop *WorkshopOperations) Workshop(req util.Request, res *util.Respons
 	res.ChildrenList = childrenList
 	fmt.Println("Time:",th.GetTime(),
 		fmt.Sprintf("Completed work from Santa for %d children!", len(res.ChildrenList)))
-
-	mStorageRoom.Lock()
-	semStorageRoom = semaphore.Init(2, 2)
-	mStorageRoom.Unlock()
 
 	return
 }
