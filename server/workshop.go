@@ -15,26 +15,31 @@ type WorkshopOperations struct {}
 
 var numOfElves = 8
 var semStorageRoom = semaphore.Init(2, 2)
+var mStorageRoom sync.Mutex
 var mTasks sync.Mutex
 
-func elf (childrenList []util.Child, ch chan util.Child) {
-
+func elf (childrenList *[]util.Child, ch chan util.Child) {
+	// Only one elf can access childrenList at a time to prevent any race conditions
 	mTasks.Lock()
-	child := childrenList[0]
-	childrenList = childrenList[1:]
-	mTasks.Unlock()
+	if len(*childrenList) > 0 {
+		child := (*childrenList)[0]
+		*childrenList = (*childrenList)[1:]
+		mTasks.Unlock()
 
-	semStorageRoom.Wait()
-	if child.Behaviour == util.Good {
-		time.Sleep(3 * time.Second)
-		child.Presents = child.WishList
+		semStorageRoom.Wait()
+		if child.Behaviour == util.Good {
+			time.Sleep(3 * time.Second)
+			child.Presents = child.WishList
+		} else {
+			time.Sleep(1 * time.Second)
+			child.Presents = append(child.Presents, util.Present{Type: util.Coal})
+		}
+
+		ch <- child
+		semStorageRoom.Post()
 	} else {
-		time.Sleep(1 * time.Second)
-		child.Presents = append(child.Presents, util.Present{Type: util.Coal})
+		mTasks.Unlock()
 	}
-
-	ch <- child
-	semStorageRoom.Post()
 }
 
 // Workshop - processes simulation of the workshop
@@ -44,18 +49,20 @@ func (workshop *WorkshopOperations) Workshop(req util.Request, res *util.Respons
 	fmt.Println("Time:",th.GetTime(),
 		fmt.Sprintf("Received work from Santa for %d children!", len(req.ChildrenList)))
 
+	numOfChildren := len(req.ChildrenList) // needed as req.ChildrenList gets modified, so len(req.ChildrenList) won't work
+
 	elves := make([]chan util.Child, numOfElves)
 	for e := 0; e < numOfElves; e++ {
 		elves[e] = make(chan util.Child)
 	}
 
 	for i := range(elves) {
-		go elf(req.ChildrenList, elves[i])
+		go elf(&req.ChildrenList, elves[i])
 	}
 
 	childrenList := []util.Child{}
 	// Whichever elf returns some work, append to childrenList, until all the presents have been made
-	for len(childrenList) < len(req.ChildrenList) {
+	for len(childrenList) < numOfChildren {
 		select {
 		case child := <-elves[0]:
 			childrenList = append(childrenList, child)
@@ -79,6 +86,10 @@ func (workshop *WorkshopOperations) Workshop(req util.Request, res *util.Respons
 	res.ChildrenList = childrenList
 	fmt.Println("Time:",th.GetTime(),
 		fmt.Sprintf("Completed work from Santa for %d children!", len(res.ChildrenList)))
+
+	mStorageRoom.Lock()
+	semStorageRoom = semaphore.Init(2, 2)
+	mStorageRoom.Unlock()
 
 	return
 }

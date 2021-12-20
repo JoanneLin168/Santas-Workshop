@@ -43,10 +43,12 @@ func TestTime(t *testing.T) {
 	th.SetStartTime()
 	client.Run(c, children, &results)
 
+	// TODO: figure out a way to calculate the time it will take for elves to work, rather than hardcoding it
+	//		or get Santa to order the tasks into the most efficient order and send that to the workshop
 	duration := th.GetTime()
-	if duration < (6 * time.Second) {
+	if duration < (4 * time.Second) {
 		t.Errorf("Duration too fast: %d", duration)
-	} else if duration > (7 * time.Second) {
+	} else if duration > (5 * time.Second) {
 		t.Errorf("Duration too slow: %d", duration)
 	}
 
