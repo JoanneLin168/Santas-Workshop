@@ -13,11 +13,11 @@ import (
 type WorkshopOperations struct {}
 
 var numOfElves = 8
-var semElves = semaphore.Init(2, 2)
+var semStorageRoom = semaphore.Init(2, 2)
 
 func elf (work []util.Child, ch chan []util.Child) {
 	// work is the children list passed from the workshop, completed is the children list with presents to return
-	semElves.Wait()
+	semStorageRoom.Wait()
 	completed := []util.Child{}
 	for c := range(work) {
 		child := work[c]
@@ -31,7 +31,7 @@ func elf (work []util.Child, ch chan []util.Child) {
 		completed = append(completed, child)
 	}
 	ch <- completed
-	semElves.Post()
+	semStorageRoom.Post()
 }
 
 // Workshop - processes simulation of the workshop
