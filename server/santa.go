@@ -71,31 +71,34 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 
 func connectToWorkshop(santa *SantaOperations, listener net.Listener) {
 	fmt.Println("Waiting for Workshop")
-	workshopReceiver, err := listener.Accept()
-	util.Check(err)
 
-	wAddr := workshopReceiver.RemoteAddr().String()
+	for {
+		workshopReceiver, err := listener.Accept()
+		util.Check(err)
 
-	// Send IP address back to the worker, so it can listen from that port for RPC calls from server
-	wIP := strings.Split(wAddr, ":")[0]
-	reader := bufio.NewReader(workshopReceiver)
-	wPort, err := reader.ReadString('\n')
-	util.Check(err)
-	workshopReceiver.Close() // only needed to get the IP address
+		wAddr := workshopReceiver.RemoteAddr().String()
 
-	// Difference between wAddr and workerAddr is that workerAddr is the address the worker listens on
-	// while wAddr is the address that the worker uses to connect to the server
-	workshopAddr := wIP+":"+wPort[:len(wPort)-1] // need to remove \n at end of wPort
-	fmt.Fprintln(workshopReceiver, workshopAddr)
+		// Send IP address back to the worker, so it can listen from that port for RPC calls from server
+		wIP := strings.Split(wAddr, ":")[0]
+		reader := bufio.NewReader(workshopReceiver)
+		wPort, err := reader.ReadString('\n')
+		util.Check(err)
+		workshopReceiver.Close() // only needed to get the IP address
 
-	mWorkshop.Lock()
-	workshopSender, err := rpc.Dial("tcp", workshopAddr)
-	// TODO: make sure that this has no errors, e.g. while Santa is waiting on the workshop to finish making the presents,
-	// 		and a new workshop is added, make sure to resend the work to the new workshop (means it will work both if the
-	//		previous workshop is still alive AND if it has crashed, and a new one started)
-	santa.Workshop = workshopSender // Note: this will replace the previous workshop
-	fmt.Println("Connected to workshop")
-	mWorkshop.Unlock()
+		// Difference between wAddr and workerAddr is that workerAddr is the address the worker listens on
+		// while wAddr is the address that the worker uses to connect to the server
+		workshopAddr := wIP+":"+wPort[:len(wPort)-1] // need to remove \n at end of wPort
+		fmt.Fprintln(workshopReceiver, workshopAddr)
+
+		mWorkshop.Lock()
+		workshopSender, err := rpc.Dial("tcp", workshopAddr)
+		// TODO: make sure that this has no errors, e.g. while Santa is waiting on the workshop to finish making the presents,
+		// 		and a new workshop is added, make sure to resend the work to the new workshop (means it will work both if the
+		//		previous workshop is still alive AND if it has crashed, and a new one started)
+		santa.Workshop = workshopSender // Note: this will replace the previous workshop
+		fmt.Println("Connected to workshop")
+		mWorkshop.Unlock()
+	}
 }
 
 // main - registers RPC procedures
