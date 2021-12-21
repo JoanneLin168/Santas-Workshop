@@ -3,35 +3,46 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/ChrisGora/semaphore"
 	"net"
 	"net/rpc"
+	"sync"
 	"time"
 	"workshop/util"
-	"github.com/ChrisGora/semaphore"
 )
 
 type WorkshopOperations struct {}
 
 var numOfElves = 8
-var semStorageRoom = semaphore.Init(2, 2)
+var semStorageRoom = semaphore.Init(4, 4)
+var mTasks sync.Mutex
 
-func elf (work []util.Child, ch chan []util.Child) {
-	// work is the children list passed from the workshop, completed is the children list with presents to return
-	semStorageRoom.Wait()
-	completed := []util.Child{}
-	for c := range(work) {
-		child := work[c]
-		if child.Behaviour == util.Good {
-			time.Sleep(3 * time.Second)
-			child.Presents = child.WishList
+func elf (id int, childrenList *[]util.Child, ch chan util.Child) {
+	// Only one elf can access childrenList at a time to prevent any race conditions
+	for {
+		mTasks.Lock()
+		if len(*childrenList) > 0 {
+			child := (*childrenList)[0]
+			*childrenList = (*childrenList)[1:]
+			mTasks.Unlock()
+
+			semStorageRoom.Wait()
+			if child.Behaviour == util.Good {
+				time.Sleep(3 * time.Second)
+				child.Presents = child.WishList
+			} else {
+				time.Sleep(1 * time.Second)
+				child.Presents = append(child.Presents, util.Present{Type: util.Coal})
+			}
+
+			ch <- child
+			semStorageRoom.Post()
 		} else {
-			time.Sleep(1 * time.Second)
-			child.Presents = append(child.Presents, util.Present{Type: util.Coal})
+			mTasks.Unlock()
+			break
 		}
-		completed = append(completed, child)
 	}
-	ch <- completed
-	semStorageRoom.Post()
+
 }
 
 // Workshop - processes simulation of the workshop
@@ -41,28 +52,38 @@ func (workshop *WorkshopOperations) Workshop(req util.Request, res *util.Respons
 	fmt.Println("Time:",th.GetTime(),
 		fmt.Sprintf("Received work from Santa for %d children!", len(req.ChildrenList)))
 
-	elves := make([]chan []util.Child, numOfElves)
+	numOfChildren := len(req.ChildrenList) // needed as req.ChildrenList gets modified, so len(req.ChildrenList) won't work
+
+	elves := make([]chan util.Child, numOfElves)
 	for e := 0; e < numOfElves; e++ {
-		elves[e] = make(chan []util.Child)
+		elves[e] = make(chan util.Child)
 	}
 
-	elvesWithWork := []int{}
-	for i := 0; i < len(elves); i++ {
-		// Split work
-		start := i * len(req.ChildrenList) / len(elves)
-		end := (i+1) * len(req.ChildrenList) / len(elves)
-		work := req.ChildrenList[start:end]
-
-		if len(work) > 0 { // prevents elves with no work from doing work
-			go elf(work, elves[i])
-			elvesWithWork = append(elvesWithWork, i)
-		}
+	for i := range(elves) {
+		go elf(i, &req.ChildrenList, elves[i])
 	}
 
 	childrenList := []util.Child{}
-	for i := range(elvesWithWork) {
-		index := elvesWithWork[i]
-		childrenList = append(childrenList, <-elves[index]...)
+	// Whichever elf returns some work, append to childrenList, until all the presents have been made
+	for len(childrenList) < numOfChildren {
+		select {
+		case child := <-elves[0]:
+			childrenList = append(childrenList, child)
+		case child := <-elves[1]:
+			childrenList = append(childrenList, child)
+		case child := <-elves[2]:
+			childrenList = append(childrenList, child)
+		case child := <-elves[3]:
+			childrenList = append(childrenList, child)
+		case child := <-elves[4]:
+			childrenList = append(childrenList, child)
+		case child := <-elves[5]:
+			childrenList = append(childrenList, child)
+		case child := <-elves[6]:
+			childrenList = append(childrenList, child)
+		case child := <-elves[7]:
+			childrenList = append(childrenList, child)
+		}
 	}
 
 	res.ChildrenList = childrenList

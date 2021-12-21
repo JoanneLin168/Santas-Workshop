@@ -36,6 +36,11 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	fmt.Println("Time:",th.GetTime(),
 		fmt.Sprintf("Santa has received the wishlists of %d children!", len(req.ChildrenList)))
 
+	// if there are no children in the request, just return an empty response
+	if len(req.ChildrenList) == 0 {
+		return
+	}
+
 	out := make(chan []util.Child)
 	ticker := time.NewTicker(2 * time.Second)
 	done := make(chan bool)
