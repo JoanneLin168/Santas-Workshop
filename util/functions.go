@@ -6,6 +6,16 @@ func Check(e error) {
 	}
 }
 
+// ChildInSlice - checks if a child is in the slice. Note: compares names - might need to make a comparison function for Child
+func ChildInSlice(child Child, children []Child) bool {
+	for c := range(children) {
+		if child.Name == children[c].Name {
+			return true
+		}
+	}
+	return false
+}
+
 func RemoveChild(i int, xs []Child) []Child {
 	return append(xs[:i], xs[i+1:]...)
 }
