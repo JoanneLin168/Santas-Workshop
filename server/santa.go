@@ -36,7 +36,6 @@ func childInSlice(child util.Child, children []util.Child) bool {
 func calculatePath(children []util.Child, path *[]util.Child, location *util.Address, pathCalculated chan bool) {
 	// Santa is lazy, and so he wants to take the shortest path between every child - greedily!
 	if len(children) == 0 {
-		*location = util.Address{0, 0}
 		// Note: doesn't add Santa's Workshop as the final destination because of path's type.
 		pathCalculated <- true
 		return
@@ -103,10 +102,11 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	done := make(chan bool)
 	path := []util.Child{}
 	pathCalculated := make(chan bool)
+	santasWorkshopLocation := util.Address{"Santa", 0, 0}
 	ticker := time.NewTicker(2 * time.Second)
 	results := []util.Child{}
 	go beginProduction(santa.Workshop, req.ChildrenList, out)
-	go calculatePath(req.ChildrenList, &path, &util.Address{0, 0}, pathCalculated)
+	go calculatePath(req.ChildrenList, &path, &util.Address{"Santa", 0, 0}, pathCalculated)
 	go func(done chan bool, ticker *time.Ticker){
 		for {
 			select {
@@ -120,7 +120,13 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	}(done, ticker)
 
 	<-pathCalculated
-	fmt.Println("Time:",th.GetTime(), "Path:", path)
+	// Note: path stores the children, route stores the addresses
+	route := []util.Address{santasWorkshopLocation}
+	for c := range path {
+		route = append(route, path[c].Address)
+	}
+	route = append(route, santasWorkshopLocation)
+	fmt.Println("Time:",th.GetTime(), "Santa's Route:", route)
 	results = <-out
 	done <- true
 
@@ -132,8 +138,7 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	fmt.Println("Time:",th.GetTime(),
 		fmt.Sprintf("The presents for all %d children are ready to be delivered!", len(res.ChildrenList)))
 
-	// TODO: Santa figures out a path to deliver to all of the children - perhaps greedy algorithm?
-	// 	Note: this is the travelling salesman problem
+	fmt.Println("##################################################")
 
 	return
 }

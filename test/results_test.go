@@ -20,7 +20,7 @@ func TestResults(t *testing.T) {
 
 	testSets := GetSets()
 	for i := range testSets {
-		testName := "Set: "+string(rune(65+i))
+		testName := "Set:"+string(rune(65+i))
 		t.Run(testName, func(t *testing.T) {
 			children := testSets[i]
 			results := []util.Child{}

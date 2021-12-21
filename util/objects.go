@@ -24,8 +24,9 @@ const (
 )
 
 type Address struct { // Note: Santa has an address of (0,0)
-	X int
-	Y int
+	Person string
+	X      int
+	Y      int
 }
 
 type Child struct {
