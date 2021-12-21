@@ -37,7 +37,7 @@ func TestInput(t *testing.T) {
 	for i := range invalid {
 		testName := "Set:" + string(rune(88+i))
 		t.Run(testName, func(t *testing.T) {
-			filename := "check/valid/input" + string(invalid[i]) + ".csv"
+			filename := "check/invalid/input" + string(invalid[i]) + ".csv"
 			defer func() {
 				if r := recover(); r == nil {
 					t.Errorf("The code incorrectly processed an invalid CSV without panicking")
