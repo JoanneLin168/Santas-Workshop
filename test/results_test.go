@@ -18,13 +18,14 @@ func TestResults(t *testing.T) {
 	util.Check(err)
 	defer c.Close()
 
-	testSets := GetSets()
+	testSets := GetSets([]rune{'A', 'B', 'C', 'D', 'E'})
 	for i := range testSets {
 		testName := "Set:"+string(rune(65+i))
 		t.Run(testName, func(t *testing.T) {
 			children := testSets[i]
 			results := []util.Child{}
-			client.Run(c, children, &results)
+			route := []util.Address{}
+			client.Run(c, children, &results, &route)
 
 			if len(results) != len(children) {
 				t.Errorf("Incorrect number of children returned: %d != %d", len(results), len(children))

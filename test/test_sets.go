@@ -2,10 +2,24 @@ package test
 
 import "workshop/util"
 
-func GetSets() [][]util.Child {
-	sets := [][]util.Child{
-		SetA(), SetB(), SetC(), SetD(), SetE(),
+func GetSets(letters []rune) [][]util.Child {
+	sets := [][]util.Child{}
+	for l := range letters {
+		letter := letters[l]
+		switch letter {
+		case 'A':
+			sets = append(sets, SetA())
+		case 'B':
+			sets = append(sets, SetB())
+		case 'C':
+			sets = append(sets, SetC())
+		case 'D':
+			sets = append(sets, SetD())
+		case 'E':
+			sets = append(sets, SetE())
+		}
 	}
+
 	return sets
 }
 

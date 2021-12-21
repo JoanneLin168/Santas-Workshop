@@ -6,7 +6,7 @@ import (
 	"workshop/util"
 )
 
-func Run(client *rpc.Client, children []util.Child, results *[]util.Child) {
+func Run(client *rpc.Client, children []util.Child, results *[]util.Child, route *[]util.Address) {
 	request := util.Request{ChildrenList: children}
 	response := new(util.Response)
 	var th util.TimeHandler
@@ -21,4 +21,5 @@ func Run(client *rpc.Client, children []util.Child, results *[]util.Child) {
 		fmt.Sprintf("All %d children has received gifts from Santa!", len(children)))
 
 	*results = response.ChildrenList
+	*route   = response.Route
 }

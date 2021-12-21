@@ -45,8 +45,8 @@ func calculatePath(children []util.Child, path *[]util.Child, location *util.Add
 	for c := range children {
 		child := (children)[c]
 		if !childInSlice(child, *path) {
-			xSquared := math.Abs(float64((*location).X ^ 2 - child.Address.Y ^ 2))
-			ySquared := math.Abs(float64((*location).Y^2 - child.Address.Y^2))
+			xSquared := math.Pow(math.Abs(float64((*location).X - child.Address.X)), 2)
+			ySquared := math.Pow(math.Abs(float64((*location).Y - child.Address.Y)), 2)
 			distance := math.Sqrt(xSquared+ySquared)
 
 			// if distance was not a key in distancesMap, add it
@@ -62,6 +62,7 @@ func calculatePath(children []util.Child, path *[]util.Child, location *util.Add
 	}
 	shortestDistance := util.MinFloat64(distancesKeys)
 	closestChild := distancesMap[shortestDistance]
+	fmt.Println(*location, closestChild.Name, distancesMap)
 	*path = append(*path, closestChild)
 
 	index := -1
@@ -134,6 +135,7 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	// 		and therefore broker will need to send work to workers again
 	//		Note: not too sure if this is still applicable
 	res.ChildrenList = results
+	res.Route        = route
 
 	fmt.Println("Time:",th.GetTime(),
 		fmt.Sprintf("The presents for all %d children are ready to be delivered!", len(res.ChildrenList)))

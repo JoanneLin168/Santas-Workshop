@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net/rpc"
-	client2 "workshop/client"
+	c "workshop/client"
 	"workshop/test"
 	"workshop/util"
 )
@@ -21,6 +21,7 @@ func main() {
 	children := test.SetC()
 
 	results := []util.Child{}
-	client2.Run(client, children, &results)
+	route := []util.Address{}
+	c.Run(client, children, &results, &route)
 	fmt.Println(fmt.Sprintf("All %d children have received presents from Santa!", len(results)))
 }
