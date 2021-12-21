@@ -1,8 +1,8 @@
 package util
 
-type presentType uint8
+type PresentType uint8
 const (
-	Coal presentType = iota
+	Coal PresentType = iota
 	Console
 	Robot
 	Doll
@@ -14,12 +14,12 @@ const (
 )
 
 type Present struct {
-	Type  presentType
+	Type PresentType
 }
 
-type behaviourType uint8
+type BehaviourType uint8
 const (
-	Good behaviourType = iota
+	Good BehaviourType = iota
 	Bad
 )
 
@@ -31,7 +31,7 @@ type Address struct { // Note: Santa has an address of (0,0)
 
 type Child struct {
 	Name      string
-	Behaviour behaviourType
+	Behaviour BehaviourType
 	Address   Address
 	WishList  []Present
 	Presents  []Present
