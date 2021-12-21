@@ -62,7 +62,6 @@ func calculatePath(children []util.Child, path *[]util.Child, location *util.Add
 	}
 	shortestDistance := util.MinFloat64(distancesKeys)
 	closestChild := distancesMap[shortestDistance]
-	fmt.Println(*location, closestChild.Name, distancesMap)
 	*path = append(*path, closestChild)
 
 	index := -1
