@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/rpc"
 	c "workshop/client"
-	"workshop/test"
 	"workshop/util"
 )
 
@@ -18,7 +17,7 @@ func main() {
 	defer client.Close()
 
 	// temporary list of children, in the future use text file/csv
-	children := test.SetC()
+	children := util.ConvertCSV("input.csv")
 
 	results := []util.Child{}
 	route := []util.Address{}
