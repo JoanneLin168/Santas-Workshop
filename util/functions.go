@@ -6,20 +6,48 @@ func Check(e error) {
 	}
 }
 
-func Max(xs []int) int {
-	max := 0
-	for i, x := range xs {
-		if i == 0 || x > max {
+func RemoveChild(i int, xs []Child) []Child {
+	return append(xs[:i], xs[i+1:]...)
+}
+
+func MaxInt(xs []int) int {
+	max := xs[0]
+	for i := range xs {
+		x := xs[i]
+		if x > max {
 			max = x
 		}
 	}
 	return max
 }
 
-func Min(xs []int) int {
-	min := 0
-	for x := range xs {
-		if x == 0 || x < min {
+func MinInt(xs []int) int {
+	min := xs[0]
+	for i := range xs {
+		x := xs[i]
+		if x < min {
+			min = x
+		}
+	}
+	return min
+}
+
+func MaxFloat64(xs []float64) float64 {
+	max := xs[0]
+	for i := range xs {
+		x := xs[i]
+		if x > max {
+			max = x
+		}
+	}
+	return max
+}
+
+func MinFloat64(xs []float64) float64 {
+	min := xs[0]
+	for i := range xs {
+		x := xs[i]
+		if x < min {
 			min = x
 		}
 	}

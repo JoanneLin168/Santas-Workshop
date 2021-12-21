@@ -14,7 +14,6 @@ const (
 )
 
 type Present struct {
-	//Child Child <- not too sure if needed or not
 	Type  presentType
 }
 
@@ -23,9 +22,16 @@ const (
 	Good behaviourType = iota
 	Bad
 )
+
+type Address struct { // Note: Santa has an address of (0,0)
+	X int
+	Y int
+}
+
 type Child struct {
-	Name  string
+	Name      string
 	Behaviour behaviourType
-	WishList []Present
-	Presents []Present
+	Address   Address
+	WishList  []Present
+	Presents  []Present
 }

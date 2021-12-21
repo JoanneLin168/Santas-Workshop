@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"net/rpc"
@@ -19,6 +20,63 @@ var th util.TimeHandler
 
 type SantaOperations struct {
 	Workshop *rpc.Client
+}
+
+// childInSlice - checks if a child is in the slice. Note: compares names - might need to make a comparison function for Child
+func childInSlice(child util.Child, children []util.Child) bool {
+	for c := range(children) {
+		if child.Name == children[c].Name {
+			return true
+		}
+	}
+	return false
+}
+
+// calculatePath - Generate a path for Santa's route on Christmas Eve
+func calculatePath(children []util.Child, path *[]util.Child, location *util.Address, pathCalculated chan bool) {
+	// Santa is lazy, and so he wants to take the shortest path between every child - greedily!
+	if len(children) == 0 {
+		*location = util.Address{0, 0}
+		// Note: doesn't add Santa's Workshop as the final destination because of path's type.
+		pathCalculated <- true
+		return
+	}
+
+	distancesMap := make(map[float64]util.Child)
+	for c := range children {
+		child := (children)[c]
+		if !childInSlice(child, *path) {
+			xSquared := math.Abs(float64((*location).X ^ 2 - child.Address.Y ^ 2))
+			ySquared := math.Abs(float64((*location).Y^2 - child.Address.Y^2))
+			distance := math.Sqrt(xSquared+ySquared)
+
+			// if distance was not a key in distancesMap, add it
+			if _, ok := distancesMap[distance]; !ok {
+				distancesMap[distance] = child
+			}
+		}
+	}
+
+	distancesKeys := []float64{}
+	for k := range distancesMap {
+		distancesKeys = append(distancesKeys, k)
+	}
+	shortestDistance := util.MinFloat64(distancesKeys)
+	closestChild := distancesMap[shortestDistance]
+	*path = append(*path, closestChild)
+
+	index := -1
+	for i := range children {
+		if children[i].Name == closestChild.Name {
+			index = i
+			break
+		}
+	}
+
+	*location = closestChild.Address
+	remaining := util.RemoveChild(index, children)
+
+	calculatePath(remaining, path, location, pathCalculated)
 }
 
 // beginProduction - sends a request to the WorkshopOperations to begin working on the presents
@@ -42,10 +100,13 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	}
 
 	out := make(chan []util.Child)
-	ticker := time.NewTicker(2 * time.Second)
 	done := make(chan bool)
+	path := []util.Child{}
+	pathCalculated := make(chan bool)
+	ticker := time.NewTicker(2 * time.Second)
 	results := []util.Child{}
 	go beginProduction(santa.Workshop, req.ChildrenList, out)
+	go calculatePath(req.ChildrenList, &path, &util.Address{0, 0}, pathCalculated)
 	go func(done chan bool, ticker *time.Ticker){
 		for {
 			select {
@@ -57,6 +118,9 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 		}
 	}
 	}(done, ticker)
+
+	<-pathCalculated
+	fmt.Println("Time:",th.GetTime(), "Path:", path)
 	results = <-out
 	done <- true
 
