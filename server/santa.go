@@ -1,35 +1,99 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
+	"github.com/ChrisGora/semaphore"
 	"math"
 	"math/rand"
 	"net"
 	"net/rpc"
-	"strings"
 	"sync"
 	"time"
 	"workshop/util"
 )
 
-var mWorkshop sync.Mutex
-
-var th util.TimeHandler
-
 type SantaOperations struct {
 	Workshop *rpc.Client
 }
 
-// childInSlice - checks if a child is in the slice. Note: compares names - might need to make a comparison function for Child
-func childInSlice(child util.Child, children []util.Child) bool {
-	for c := range(children) {
-		if child.Name == children[c].Name {
-			return true
+var numOfElves = 8
+var semStorageRoom = semaphore.Init(4, 4)
+var mTasks sync.Mutex
+var mWorkshop sync.Mutex
+var th util.TimeHandler
+
+func elf (id int, childrenList *[]util.Child, ch chan util.Child) {
+	// Only one elf can access childrenList at a time to prevent any race conditions
+	for {
+		mTasks.Lock()
+		if len(*childrenList) > 0 {
+			child := (*childrenList)[0]
+			*childrenList = (*childrenList)[1:]
+			mTasks.Unlock()
+
+			semStorageRoom.Wait()
+			if child.Behaviour == util.Good {
+				time.Sleep(time.Duration(3 * len(child.WishList)) * time.Second)
+				child.Presents = child.WishList
+			} else {
+				time.Sleep(1 * time.Second)
+				child.Presents = append(child.Presents, util.Present{Type: util.Coal})
+			}
+
+			ch <- child
+			semStorageRoom.Post()
+		} else {
+			mTasks.Unlock()
+			break
 		}
 	}
-	return false
+
+}
+
+// production - sends a request to the WorkshopOperations to begin working on the presents
+func production(th *util.TimeHandler, inputChildren []util.Child, out chan []util.Child) {
+	fmt.Println("Time:",th.GetTime(),
+		fmt.Sprintf("Received work from Santa for %d children!", len(inputChildren)))
+
+	numOfChildren := len(inputChildren) // needed as req.ChildrenList gets modified, so len(req.ChildrenList) won't work
+
+	elves := make([]chan util.Child, numOfElves)
+	for e := 0; e < numOfElves; e++ {
+		elves[e] = make(chan util.Child)
+	}
+
+	for i := range elves {
+		go elf(i, &inputChildren, elves[i])
+	}
+
+	outputChildren := []util.Child{}
+	// Whichever elf returns some work, append to outputChildren, until all the presents have been made
+	for len(outputChildren) < numOfChildren {
+		select {
+		case child := <-elves[0]:
+			outputChildren = append(outputChildren, child)
+		case child := <-elves[1]:
+			outputChildren = append(outputChildren, child)
+		case child := <-elves[2]:
+			outputChildren = append(outputChildren, child)
+		case child := <-elves[3]:
+			outputChildren = append(outputChildren, child)
+		case child := <-elves[4]:
+			outputChildren = append(outputChildren, child)
+		case child := <-elves[5]:
+			outputChildren = append(outputChildren, child)
+		case child := <-elves[6]:
+			outputChildren = append(outputChildren, child)
+		case child := <-elves[7]:
+			outputChildren = append(outputChildren, child)
+		}
+	}
+
+	fmt.Println("Time:",th.GetTime(),
+		fmt.Sprintf("Completed work from Santa for %d children!", len(outputChildren)))
+
+	out <- outputChildren
 }
 
 // calculatePath - Generate a path for Santa's route on Christmas Eve
@@ -44,7 +108,7 @@ func calculatePath(children []util.Child, path *[]util.Child, location *util.Add
 	distancesMap := make(map[float64]util.Child)
 	for c := range children {
 		child := (children)[c]
-		if !childInSlice(child, *path) {
+		if !util.ChildInSlice(child, *path) {
 			xSquared := math.Pow(math.Abs(float64((*location).X - child.Address.X)), 2)
 			ySquared := math.Pow(math.Abs(float64((*location).Y - child.Address.Y)), 2)
 			distance := math.Sqrt(xSquared+ySquared)
@@ -78,14 +142,6 @@ func calculatePath(children []util.Child, path *[]util.Child, location *util.Add
 	calculatePath(remaining, path, location, pathCalculated)
 }
 
-// beginProduction - sends a request to the WorkshopOperations to begin working on the presents
-func beginProduction(workshop *rpc.Client, children []util.Child, out chan []util.Child) {
-	request := util.Request{ChildrenList: children}
-	response := new(util.Response)
-	workshop.Call(util.WorkshopHandler, request, response)
-	out <- response.ChildrenList
-}
-
 // Run - processes simulation of the workshop
 func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err error) {
 	th.SetStartTime()
@@ -99,25 +155,27 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	}
 
 	out := make(chan []util.Child)
-	done := make(chan bool)
 	path := []util.Child{}
 	pathCalculated := make(chan bool)
 	santasWorkshopLocation := util.Address{"Santa", 0, 0}
-	ticker := time.NewTicker(2 * time.Second)
+	//done := make(chan bool)
+	//ticker := time.NewTicker(2 * time.Second)
 	results := []util.Child{}
-	go beginProduction(santa.Workshop, req.ChildrenList, out)
+	children := make([]util.Child, len(req.ChildrenList))
+	copy(children, req.ChildrenList)
+	go production(&th, children, out)
 	go calculatePath(req.ChildrenList, &path, &util.Address{"Santa", 0, 0}, pathCalculated)
-	go func(done chan bool, ticker *time.Ticker){
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				// TODO: make multiple messages to randomly print while he is waiting
-				fmt.Println("Time:",th.GetTime(),"Santa drinks a cup of tea")
-		}
-	}
-	}(done, ticker)
+	//go func(done chan bool, ticker *time.Ticker){
+	//	for {
+	//		select {
+	//		case <-done:
+	//			return
+	//		case <-ticker.C:
+	//			// TODO: make multiple messages to randomly print while he is waiting
+	//			fmt.Println("Time:",th.GetTime(),"Santa drinks a cup of tea")
+	//	}
+	//}
+	//}(done, ticker)
 
 	<-pathCalculated
 	// Note: path stores the children, route stores the addresses
@@ -128,11 +186,8 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	route = append(route, santasWorkshopLocation)
 	fmt.Println("Time:",th.GetTime(), "Santa's Route:", route)
 	results = <-out
-	done <- true
+	//done <- true
 
-	// TODO: after a certain amount of time, presume that one of the workers has stopped working
-	// 		and therefore broker will need to send work to workers again
-	//		Note: not too sure if this is still applicable
 	res.ChildrenList = results
 	res.Route        = route
 
@@ -144,59 +199,20 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	return
 }
 
-func connectToWorkshop(santa *SantaOperations, listener net.Listener) {
-	fmt.Println("Waiting for Workshop")
-
-	for {
-		workshopReceiver, err := listener.Accept()
-		util.Check(err)
-
-		wAddr := workshopReceiver.RemoteAddr().String()
-
-		// Send IP address back to the worker, so it can listen from that port for RPC calls from server
-		wIP := strings.Split(wAddr, ":")[0]
-		reader := bufio.NewReader(workshopReceiver)
-		wPort, err := reader.ReadString('\n')
-		util.Check(err)
-		workshopReceiver.Close() // only needed to get the IP address
-
-		// Difference between wAddr and workerAddr is that workerAddr is the address the worker listens on
-		// while wAddr is the address that the worker uses to connect to the server
-		workshopAddr := wIP+":"+wPort[:len(wPort)-1] // need to remove \n at end of wPort
-		fmt.Fprintln(workshopReceiver, workshopAddr)
-
-		mWorkshop.Lock()
-		workshopSender, err := rpc.Dial("tcp", workshopAddr)
-		// TODO: make sure that this has no errors, e.g. while Santa is waiting on the workshop to finish making the presents,
-		// 		and a new workshop is added, make sure to resend the work to the new workshop (means it will work both if the
-		//		previous workshop is still alive AND if it has crashed, and a new one started)
-		santa.Workshop = workshopSender // Note: this will replace the previous workshop
-		fmt.Println("Connected to workshop")
-		mWorkshop.Unlock()
-	}
-}
-
 // main - registers RPC procedures
 func main() {
 	// Listen to client
-	clientListenerPort := flag.String("client", "8080", "Port to listen on for client")
-	workerListenerPort := flag.String("worker", "8081", "Port to listen on for workers")
+	port := flag.String("client", "8080", "Port to listen on for client")
 	flag.Parse()
-	fmt.Println("Broker running...")
+	fmt.Println("Santa's Workshop is up and running!")
 
 	rand.Seed(time.Now().UnixNano())
 	santa := SantaOperations{}
 	rpc.Register(&santa)
 
-	// Start goroutine to repeatedly accept workers joining server
-	workerListener, err := net.Listen("tcp", ":"+*workerListenerPort)
-	util.Check(err)
-	defer workerListener.Close()
-	go connectToWorkshop(&santa, workerListener)
-
-	clientListener, err := net.Listen("tcp", ":"+*clientListenerPort)
+	client, err := net.Listen("tcp", ":"+*port)
 	util.Check(err)
 
-	defer clientListener.Close()
-	rpc.Accept(clientListener)
+	defer client.Close()
+	rpc.Accept(client)
 }
