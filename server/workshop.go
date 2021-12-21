@@ -3,18 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/ChrisGora/semaphore"
 	"net"
 	"net/rpc"
 	"sync"
 	"time"
 	"workshop/util"
-	"github.com/ChrisGora/semaphore"
 )
 
 type WorkshopOperations struct {}
 
 var numOfElves = 8
-var semStorageRoom = semaphore.Init(2, 2)
+var semStorageRoom = semaphore.Init(4, 4)
 var mTasks sync.Mutex
 
 func elf (id int, childrenList *[]util.Child, ch chan util.Child) {
