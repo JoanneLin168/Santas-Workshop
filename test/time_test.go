@@ -28,7 +28,7 @@ func TestTime(t *testing.T) {
 			route := []util.Address{}
 			var th util.TimeHandler
 			th.SetStartTime()
-			client.Run(c, children, &results, &route)
+			client.Run(0, c, children, &results, &route)
 
 			expectedTime := expectedDuration(children)
 			if th.GetTime() < expectedTime * time.Second || th.GetTime() > (expectedTime+1) * time.Second {

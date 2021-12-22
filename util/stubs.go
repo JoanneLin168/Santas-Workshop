@@ -1,6 +1,6 @@
 package util
 
-var SantaHandler = "SantaOperations.Run"
+var WorkshopHandler = "WorkshopOperations.Run"
 
 type Response struct {
 	ChildrenList  []Child
@@ -8,5 +8,6 @@ type Response struct {
 }
 
 type Request struct {
+	Sender        int
 	ChildrenList  []Child
 }

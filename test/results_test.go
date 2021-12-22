@@ -25,7 +25,7 @@ func TestResults(t *testing.T) {
 			children := testSets[i]
 			results := []util.Child{}
 			route := []util.Address{}
-			client.Run(c, children, &results, &route)
+			client.Run(0, c, children, &results, &route)
 
 			if len(results) != len(children) {
 				t.Errorf("Incorrect number of children returned: %d != %d", len(results), len(children))

@@ -1,27 +1,79 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"github.com/ChrisGora/semaphore"
 	"math"
-	"math/rand"
 	"net"
 	"net/rpc"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"workshop/util"
 )
 
-type SantaOperations struct {
-	Workshop *rpc.Client
+type WorkshopOperations struct {
+	Clients *map[int]net.Conn
+}
+
+type actionType uint8
+const (
+	START actionType = iota
+	STOP
+	ELF_ENTER
+	ELF_EXIT
+	ROUTE
+)
+
+type sendToClient struct {
+	val bool
+	client net.Conn
 }
 
 var numOfElves = 8
 var semStorageRoom = semaphore.Init(4, 4)
 var mTasks sync.Mutex
 
-func elf (id int, th *util.TimeHandler, childrenList *[]util.Child, ch chan util.Child) {
+// log - logs what is happening in the system
+func log(th *util.TimeHandler, toSend *sendToClient, str string, aType actionType) {
+	/**
+	START messages:
+		- number of children in list
+	STOP messages:
+		- number of children in list
+	ELF messages (include ID in every message):
+		- elf enter storage room
+		- elf exit storage room
+	ROUTE messages
+		- the path
+	 */
+	var action string
+	switch aType {
+	case START :
+		action = "START"
+	case STOP:
+		action = "STOP"
+	case ELF_ENTER:
+		action = "ELF_ENTER"
+	case ELF_EXIT:
+		action = "ELF_EXIT"
+	case ROUTE:
+		action = "ROUTE"
+	}
+	toPrint := action+":"+str
+	fmt.Println("Time:",th.GetTime(),toPrint)
+
+	if toSend.val {
+		fmt.Fprintln(toSend.client, toPrint)
+	}
+
+}
+
+// elf - enters the storage room and prepares the present for each child
+func elf (id int, toSend *sendToClient, th *util.TimeHandler, childrenList *[]util.Child, ch chan util.Child) {
 	// Only one elf can access childrenList at a time to prevent any race conditions
 	for {
 		mTasks.Lock()
@@ -31,8 +83,9 @@ func elf (id int, th *util.TimeHandler, childrenList *[]util.Child, ch chan util
 			mTasks.Unlock()
 
 			semStorageRoom.Wait()
-			fmt.Println("Time:",th.GetTime(),
-				fmt.Sprintf("Elf %d has entered the storage room to create the presents for %s", id, child.Name))
+			str := fmt.Sprintf("%d;%s", id, child.Name)
+			log(th, toSend, str, ELF_ENTER)
+
 			if child.Behaviour == util.Good {
 				time.Sleep(time.Duration(3 * len(child.WishList)) * time.Second)
 				child.Presents = child.WishList
@@ -42,8 +95,8 @@ func elf (id int, th *util.TimeHandler, childrenList *[]util.Child, ch chan util
 			}
 			ch <- child
 			semStorageRoom.Post()
-			fmt.Println("Time:",th.GetTime(),
-				fmt.Sprintf("Elf %d has left the storage room", id))
+			str = fmt.Sprintf("%d;%s", id, child.Name)
+			log(th, toSend, str, ELF_EXIT)
 		} else {
 			mTasks.Unlock()
 			break
@@ -53,10 +106,7 @@ func elf (id int, th *util.TimeHandler, childrenList *[]util.Child, ch chan util
 }
 
 // production - sends a request to the WorkshopOperations to begin working on the presents
-func production(th *util.TimeHandler, inputChildren []util.Child, out chan []util.Child) {
-	fmt.Println("Time:",th.GetTime(),
-		fmt.Sprintf("Received work from Santa for %d children!", len(inputChildren)))
-
+func production(toSend *sendToClient, th *util.TimeHandler, inputChildren []util.Child, out chan []util.Child) {
 	numOfChildren := len(inputChildren) // needed as req.ChildrenList gets modified, so len(req.ChildrenList) won't work
 
 	elves := make([]chan util.Child, numOfElves)
@@ -65,7 +115,7 @@ func production(th *util.TimeHandler, inputChildren []util.Child, out chan []uti
 	}
 
 	for i := range elves {
-		go elf(i, th, &inputChildren, elves[i])
+		go elf(i, toSend, th, &inputChildren, elves[i])
 	}
 
 	outputChildren := []util.Child{}
@@ -91,13 +141,10 @@ func production(th *util.TimeHandler, inputChildren []util.Child, out chan []uti
 		}
 	}
 
-	fmt.Println("Time:",th.GetTime(),
-		fmt.Sprintf("Completed work from Santa for %d children!", len(outputChildren)))
-
 	out <- outputChildren
 }
 
-// calculatePath - Generate a path for Santa's route on Christmas Eve
+// calculatePath - generate a path for Santa's route on Christmas Eve
 func calculatePath(children []util.Child, path *[]util.Child, location *util.Address, pathCalculated chan bool) {
 	// Santa is lazy, and so he wants to take the shortest path between every child - greedily!
 	if len(children) == 0 {
@@ -144,16 +191,18 @@ func calculatePath(children []util.Child, path *[]util.Child, location *util.Add
 }
 
 // Run - processes simulation of the workshop
-func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err error) {
+func (santa *WorkshopOperations) Run(req util.Request, res *util.Response) (err error) {
+	// TODO: make this wait until client is in the clients map, maybe?
+	toSend := sendToClient{val: req.Sender != 0}
+	if toSend.val { toSend.client = (*santa.Clients)[req.Sender] }
 	var th util.TimeHandler
 	th.SetStartTime()
-
-	fmt.Println("Time:",th.GetTime(),
-		fmt.Sprintf("Santa has received the wishlists of %d children!", len(req.ChildrenList)))
+	numOfChildren := len(req.ChildrenList)
+	log(&th, &toSend, strconv.Itoa(numOfChildren), START)
 
 	// if there are no children in the request, just return an empty response
-	if len(req.ChildrenList) == 0 {
-		fmt.Println("Time:",th.GetTime(),"Santa is going back to sleep as there are no children in the list this year")
+	if numOfChildren == 0 {
+		log(&th, &toSend, "0", STOP)
 		return
 	}
 
@@ -165,7 +214,7 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 	children := make([]util.Child, len(req.ChildrenList))
 	copy(children, req.ChildrenList)
 
-	go production(&th, children, out)
+	go production(&toSend, &th, children, out)
 	go calculatePath(req.ChildrenList, &path, &util.Address{"Santa", 0, 0}, pathCalculated)
 
 	<-pathCalculated
@@ -174,34 +223,89 @@ func (santa *SantaOperations) Run(req util.Request, res *util.Response) (err err
 		route = append(route, path[c].Address)
 	}
 	route = append(route, santasWorkshopLocation)
-	fmt.Println("Time:",th.GetTime(), "Santa's Route:", route)
+	str := fmt.Sprintf("%v", route)
+	log(&th, &toSend, str, ROUTE)
 	results = <-out
 
 	res.ChildrenList = results
 	res.Route = route
-
-	fmt.Println("Time:",th.GetTime(),
-		fmt.Sprintf("The presents for all %d children are ready to be delivered!", len(res.ChildrenList)))
+	log(&th, &toSend, strconv.Itoa(numOfChildren), STOP)
 
 	fmt.Println("##################################################")
 
 	return
 }
 
-// main - registers RPC procedures
+// handleClient - when a client sends a message back, check that it is an ok message, and deal with it accordingly
+func handleClient(client net.Conn, clientid int, msgs chan util.Message) {
+	reader := bufio.NewReader(client)
+	for {
+		msg, err := reader.ReadString('\n')
+		util.Check(err)
+		msg = msg[:len(msg)-1]
+		msgSlice := strings.Split(msg, ":")
+		message := msgSlice[1]
+		msgs <- util.Message{Sender: clientid, Message: message}
+		if message == "CLOSE" {
+			break
+		}
+	}
+}
+
+// acceptConns - continuously accept a network connection from the Listener and add it to the channel for handling connections.
+func acceptConns(ln net.Listener, conns chan net.Conn) {
+	for {
+		conn, err := ln.Accept()
+		util.Check(err)
+		conns <- conn
+	}
+}
+
+// main - handles listeners
 func main() {
-	// Listen to client
-	port := flag.String("client", "8080", "Port to listen on for client")
+	rpcPort := flag.String("rpc", "8080", "Port to listen on for listener RPC")
+	ioPort := flag.String("bufio", "8081", "Port to listen on for listener bufio")
 	flag.Parse()
 	fmt.Println("Santa's Workshop is up and running!")
 
-	rand.Seed(time.Now().UnixNano())
-	santa := SantaOperations{}
+	conns := make(chan net.Conn)
+	msgs := make(chan util.Message)
+	clients := make(map[int]net.Conn)
+
+	// IO code
+	go func(){
+		ioListener, err := net.Listen("tcp", ":"+*ioPort)
+		util.Check(err)
+		go acceptConns(ioListener, conns)
+		for {
+			// TODO: handle clients disconnecting
+			select {
+			case conn := <-conns:
+				id := len(clients) + 1 // id 0 is for the Workshop
+				clients[id] = conn
+				fmt.Println("Client", id, "has connected!")
+				fmt.Fprintln(conn, "ID:"+strconv.Itoa(id))
+				go handleClient(conn, id, msgs)
+			case msg := <-msgs:
+				// TODO: handle clients that don't send back an "ok" message after receiving from server
+				// 	also handle when client doesn't send an "ok" message back after 10 seconds (tbc)
+				if msg.Message == "OK" {
+					continue
+				} else if msg.Message == "CLOSE" {
+					fmt.Fprintln(clients[msg.Sender], "CLOSED:0")
+					delete(clients, msg.Sender)
+				} else {
+					fmt.Println("Uh oh...")
+				}
+			}
+		}
+	}()
+
+	// RPC code
+	santa := WorkshopOperations{&clients}
 	rpc.Register(&santa)
-
-	client, err := net.Listen("tcp", ":"+*port)
+	rpcListener, err := net.Listen("tcp", ":"+*rpcPort)
 	util.Check(err)
-
-	defer client.Close()
-	rpc.Accept(client)
+	defer rpcListener.Close()
+	rpc.Accept(rpcListener)
 }
