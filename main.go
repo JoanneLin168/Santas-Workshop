@@ -19,11 +19,7 @@ import (
 
 func success(conn *net.Conn, g *c.Game, task c.Task) {
 	// close the channel to prevent blocking
-	if task.Action != util.STOP {
-		g.VisQueue <- task
-	} else {
-		close(g.VisQueue)
-	}
+	g.VisQueue <- task
 	fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:OK", task.Id))
 }
 
@@ -87,7 +83,16 @@ func main() {
 
 	// Set up
 	visQueue := make(chan c.Task, 100)
-	game := &c.Game{[]c.VisElf{}, "", visQueue,[]int{-1, -1, -1, -1}} // Set up game
+	workshopSpace := []int{-1, -1, -1, -1}
+	start := make(chan bool)
+	game := &c.Game { // Set up game
+		VisElves: []c.VisElf{},
+		VisRoute: "",
+		VisQueue: visQueue,
+		WorkshopSpace: workshopSpace,
+		Start: start,
+		Stage: c.STANDBY,
+	}
 	ebiten.SetWindowSize(c.ScreenWidth, c.ScreenHeight)
 	ebiten.SetWindowTitle("Santa's Workshop")
 
@@ -104,7 +109,6 @@ func main() {
 	}()
 	id := <-idChan
 
-	children := util.ConvertCSV("input.csv")
 	c.Init()
 
 	// Initialise elves
@@ -122,16 +126,21 @@ func main() {
 
 	// RPC dial to server
 	go func() {
-		results := []util.Child{}
-		route := []util.Address{}
-		time.Sleep(2 * time.Second)
-		c.Run(id, client, children, &results, &route)
-		fmt.Fprintln(conn, fmt.Sprintf("CLIENT-%d:CLOSE", id))
-		<-done
+		for {
+			<-start // will start when Enter is pressed
+			children := util.ConvertCSV("input.csv") // by adding it here, means you will use latest version of csv
+			results := []util.Child{}
+			route := []util.Address{}
+			time.Sleep(2 * time.Second)
+			c.Run(id, client, children, &results, &route)
+		}
 	}()
 
 	// Run window
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
+	} else {
+		fmt.Fprintln(conn, fmt.Sprintf("CLIENT-%d:CLOSE", id))
+		<-done
 	}
 }

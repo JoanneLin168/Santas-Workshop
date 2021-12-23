@@ -4,6 +4,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
@@ -42,6 +43,13 @@ const (
 	EXIT
 )
 
+type Stages uint8
+const (
+	STANDBY Stages = iota
+	PROCESSING
+	COMPLETED
+)
+
 // VisElf - stores the id and the position of an elf sprite
 type VisElf struct {
 	Id     int
@@ -70,6 +78,8 @@ type Game struct {
 	VisRoute      string
 	VisQueue      chan Task
 	WorkshopSpace []int
+	Start         chan bool
+	Stage         Stages
 }
 
 // updateElvesPos - updates the position of the elves every time Update() is called
@@ -104,11 +114,23 @@ func (g *Game) updateElvesPos() {
 func (g *Game) Update() error {
 	// Write your game's logical update.
 
+	if g.Stage == STANDBY || g.Stage == COMPLETED {
+		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+			g.Start <- true
+		}
+	}
+
 	g.updateElvesPos() // update positions of elves
 
 	select {
 	case task := <-g.VisQueue: // upon receiving a task, update visualisation
 		switch task.Action {
+		case util.START:
+			g.Stage = PROCESSING
+		case util.STOP:
+			close(g.VisQueue)
+			g.VisQueue = make(chan Task) // make a new channel so the old channel doesn't send zeroes
+			g.Stage = COMPLETED
 		case util.ELF_ENTER:
 			workshopW, workshopH := WorkshopImg.Size()
 			mWorkshop.Lock()
@@ -168,6 +190,20 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	santaImgOp.GeoM.Translate(0, 0)
 	screen.DrawImage(SantaImg, santaImgOp)
 
+	switch g.Stage {
+	case STANDBY:
+		msg := "Press 'Enter' to start up the workshop!"
+		ebitenutil.DebugPrintAt(screen, msg, (ScreenWidth/2)-128, 0)
+	case PROCESSING:
+		msg := "Processing..."
+		ebitenutil.DebugPrintAt(screen, msg, (ScreenWidth/2)-128, 0)
+	case COMPLETED:
+		msg := "All of the presents have been created!"
+		ebitenutil.DebugPrintAt(screen, msg, (ScreenWidth/2)-128, 0)
+		msg2 := "Press 'Enter' to start up the workshop!"
+		ebitenutil.DebugPrintAt(screen, msg2, (ScreenWidth/2)-128, 14)
+	}
+
 	workshopW, _ := WorkshopImg.Size()
 	workshopImgOp := &ebiten.DrawImageOptions{}
 	workshopImgOp.GeoM.Scale(2, 2)
@@ -184,7 +220,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		_, h := WorkshopImg.Size()
 		x := 0
 		y := 2 * h
-		msg := "Route:\n"+g.VisRoute
+		msg := " Route:\n "+g.VisRoute
 		text.Draw(screen, msg, Font, x, y, color.White)
 	}
 }

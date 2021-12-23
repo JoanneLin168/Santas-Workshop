@@ -228,11 +228,14 @@ func (santa *WorkshopOperations) Run(req util.Request, res *util.Response) (err 
 }
 
 // handleClient - when a client sends a message back, check that it is an ok message, and deal with it accordingly
-func handleClient(client net.Conn, clientid int, msgs chan util.Message) {
+func handleClient(client net.Conn, clientid int, msgs chan util.Message, disconnect chan int) {
 	reader := bufio.NewReader(client)
 	for {
 		msg, err := reader.ReadString('\n')
-		util.Check(err)
+		if err != nil { // currently disconnects the io reader, TODO: disconnect the RPC as well
+			disconnect <- clientid
+			break
+		}
 		msg = msg[:len(msg)-1]
 		msgSlice := strings.Split(msg, ":")
 		message := msgSlice[1]
@@ -262,6 +265,7 @@ func main() {
 	conns := make(chan net.Conn)
 	msgs := make(chan util.Message)
 	clients := make(map[int]net.Conn)
+	disconnect := make(chan int)
 
 	// IO code
 	go func(){
@@ -276,7 +280,7 @@ func main() {
 				clients[id] = conn
 				fmt.Println("Client", id, "has connected!")
 				fmt.Fprintln(conn, "ID:"+strconv.Itoa(id))
-				go handleClient(conn, id, msgs)
+				go handleClient(conn, id, msgs, disconnect)
 			case msg := <-msgs:
 				// TODO: handle clients that don't send back an "ok" message after receiving from server
 				// 	also handle when client doesn't send an "ok" message back after 10 seconds (tbc)
@@ -288,6 +292,9 @@ func main() {
 				} else {
 					fmt.Println("Uh oh...")
 				}
+			case id := <-disconnect:
+				fmt.Println("Client", id, "has disconnected.")
+				delete(clients, id)
 			}
 		}
 	}()

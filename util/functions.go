@@ -78,7 +78,7 @@ func convertWishlist(str string) []Present {
 	// remove [] on either side of the string input
 	presents := []Present{}
 	str = str[1:len(str)-1]
-	strSlice := strings.Split(str, ";")
+	strSlice := strings.Split(str, ";") // TODO: can only handle > 1 present in wishlist
 	for s := range strSlice {
 		strPresent := strSlice[s]
 		x, err := strconv.Atoi(strPresent)
