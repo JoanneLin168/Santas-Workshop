@@ -17,58 +17,17 @@ import (
 	"workshop/util"
 )
 
-const (
-	screenWidth  = 640
-	screenHeight = 480
-)
-
-var (
-	santaImg    *ebiten.Image
-	elfImg      *ebiten.Image
-	workshopImg *ebiten.Image
-)
-
-// Game implements ebiten.Game interface.
-type Game struct{}
-
-// Update proceeds the game state.
-// Update is called every tick (1/60 [s] by default).
-func (g *Game) Update() error {
-	// Write your game's logical update.
-	// TODO: store the print statements into some queue here for visualisation
-	return nil
+func success(conn *net.Conn, g *c.Game, task c.Task) {
+	// close the channel to prevent blocking
+	if task.Action != util.STOP {
+		g.VisQueue <- task
+	} else {
+		close(g.VisQueue)
+	}
+	fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:OK", task.Id))
 }
 
-// Draw draws the game screen.
-// Draw is called every frame (typically 1/60[s] for 60Hz display).
-func (g *Game) Draw(screen *ebiten.Image) {
-	// Write your game's rendering.
-	// TODO: move 8 elves to bottom (and store their orig pos), and move workshop to either top right or middle, whatever is easiest
-	santaImgOp := &ebiten.DrawImageOptions{}
-	santaImgOp.GeoM.Scale(0.2, 0.2)
-	santaImgOp.GeoM.Translate(0, 0)
-	screen.DrawImage(santaImg, santaImgOp)
-
-	elfW, _ := elfImg.Size()
-	elfImgOp := &ebiten.DrawImageOptions{}
-	elfImgOp.GeoM.Scale(0.1, 0.1)
-	elfImgOp.GeoM.Translate(float64(screenWidth-(elfW/10)), 0)
-	screen.DrawImage(elfImg, elfImgOp)
-
-	workshopW, workshopH := elfImg.Size()
-	workshopImgOp := &ebiten.DrawImageOptions{}
-	workshopImgOp.GeoM.Scale(0.2, 0.2)
-	workshopImgOp.GeoM.Translate(float64((screenWidth/2)-((workshopW/5)/2)), float64(screenHeight-(workshopH/5)))
-	screen.DrawImage(workshopImg, workshopImgOp)
-}
-
-// Layout takes the outside size (e.g., the window size) and returns the (logical) screen size.
-// If you don't have to adjust the screen size with the outside size, just return a fixed size.
-func (g *Game) Layout(outsideWidth, outsideHeight int) (sw, sh int) {
-	return screenWidth, screenHeight
-}
-
-func read(conn *net.Conn, idChan chan int, done chan bool) {
+func read(conn *net.Conn, g *c.Game, idChan chan int, done chan bool) {
 	reader := bufio.NewReader(*conn)
 	id := -1
 	for {
@@ -89,33 +48,33 @@ func read(conn *net.Conn, idChan chan int, done chan bool) {
 		case "CLOSED":
 			done <- true
 			break
-		// TODO: will need to uncomment the ones below for when graphical window is implemented
 		case "START":
-			fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:OK", id))
+			task := c.Task{0, util.START, message}
+			success(conn, g, task)
 		case "STOP":
-			fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:OK", id))
+			task := c.Task{0, util.STOP, message}
+			success(conn, g, task)
 		case "ELF_ENTER":
-			fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:OK", id))
+			contentSlice := strings.Split(message, ";")
+			id, err := strconv.Atoi(contentSlice[0])
+			util.Check(err)
+			child := contentSlice[1]
+			task := c.Task{id, util.ELF_ENTER, child}
+			success(conn, g, task)
 		case "ELF_EXIT":
-			fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:OK", id))
+			contentSlice := strings.Split(message, ";")
+			id, err := strconv.Atoi(contentSlice[0])
+			util.Check(err)
+			child := contentSlice[1]
+			task := c.Task{id, util.ELF_EXIT, child}
+			success(conn, g, task)
 		case "ROUTE":
-			fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:OK", id))
+			task := c.Task{0, util.ROUTE, message} // TODO: consider displaying Santa's route visually
+			success(conn, g, task)
 		default: // TODO: have more messages sent back to server depending on situation, e.g. a message isn't received correctly idk
-			fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:ERROR", id)) // TODO: update this and same in server
+			fmt.Fprintln(*conn, fmt.Sprintf("CLIENT-%d:ERROR", id))
 		}
 	}
-}
-
-func decodeImages() {
-	var err error
-	santaImg, _, err = ebitenutil.NewImageFromFile("sprites/santa.png")
-	util.Check(err)
-
-	elfImg, _, err = ebitenutil.NewImageFromFile("sprites/elf.png")
-	util.Check(err)
-
-	workshopImg, _, err = ebitenutil.NewImageFromFile("sprites/workshop.png")
-	util.Check(err)
 }
 
 func main() {
@@ -126,6 +85,12 @@ func main() {
 	util.Check(err)
 	defer client.Close()
 
+	// Set up
+	visQueue := make(chan c.Task, 100)
+	game := &c.Game{[]c.VisElf{}, visQueue,[]int{-1, -1, -1, -1}} // Set up game
+	ebiten.SetWindowSize(c.ScreenWidth, c.ScreenHeight)
+	ebiten.SetWindowTitle("Santa's Workshop")
+
 	// Set up IO
 	idChan := make(chan int)
 	done := make(chan bool)
@@ -135,28 +100,37 @@ func main() {
 		flag.Parse()
 		conn, err = net.Dial("tcp", *ioAddr)
 		util.Check(err)
-		read(&conn, idChan, done)
+		read(&conn, game, idChan, done)
 	}()
 	id := <-idChan
 
 	children := util.ConvertCSV("input.csv")
+	c.DecodeImages()
 
-	decodeImages()
+	// Initialise elves
+	elfW, elfH := c.ElfImg.Size()
+	for i := 0; i < 8; i++ {
+		x := float64(2 * i * elfW)
+		y := float64(c.ScreenHeight - 2*elfH)
+		img, _, err := ebitenutil.NewImageFromFile("sprites/elf_"+strconv.Itoa(i)+".png")
+		util.Check(err)
+		c.MVisElves.Lock()
+		elf := c.VisElf{i, x, y, x, y, x, y, img}
+		game.VisElves = append(game.VisElves, elf)
+		c.MVisElves.Unlock()
+	}
 
+	// RPC dial to server
 	go func() {
 		results := []util.Child{}
 		route := []util.Address{}
-		time.Sleep(3 * time.Second)
+		time.Sleep(2 * time.Second)
 		c.Run(id, client, children, &results, &route)
 		fmt.Fprintln(conn, fmt.Sprintf("CLIENT-%d:CLOSE", id))
 		<-done
 	}()
 
-	game := &Game{}
-	// Specify the window size as you like. Here, a doubled size is specified.
-	ebiten.SetWindowSize(screenWidth, screenHeight)
-	ebiten.SetWindowTitle("Santa's Workshop")
-	// Call ebiten.RunGame to start your game loop.
+	// Run window
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
 	}

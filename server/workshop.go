@@ -19,15 +19,6 @@ type WorkshopOperations struct {
 	Clients *map[int]net.Conn
 }
 
-type actionType uint8
-const (
-	START actionType = iota
-	STOP
-	ELF_ENTER
-	ELF_EXIT
-	ROUTE
-)
-
 type sendToClient struct {
 	val bool
 	client net.Conn
@@ -38,7 +29,7 @@ var semStorageRoom = semaphore.Init(4, 4)
 var mTasks sync.Mutex
 
 // log - logs what is happening in the system
-func log(th *util.TimeHandler, toSend *sendToClient, str string, aType actionType) {
+func log(th *util.TimeHandler, toSend *sendToClient, str string, aType util.ActionType) {
 	/**
 	START messages:
 		- number of children in list
@@ -52,15 +43,15 @@ func log(th *util.TimeHandler, toSend *sendToClient, str string, aType actionTyp
 	 */
 	var action string
 	switch aType {
-	case START :
+	case util.START :
 		action = "START"
-	case STOP:
+	case util.STOP:
 		action = "STOP"
-	case ELF_ENTER:
+	case util.ELF_ENTER:
 		action = "ELF_ENTER"
-	case ELF_EXIT:
+	case util.ELF_EXIT:
 		action = "ELF_EXIT"
-	case ROUTE:
+	case util.ROUTE:
 		action = "ROUTE"
 	}
 	toPrint := action+":"+str
@@ -84,7 +75,7 @@ func elf (id int, toSend *sendToClient, th *util.TimeHandler, childrenList *[]ut
 
 			semStorageRoom.Wait()
 			str := fmt.Sprintf("%d;%s", id, child.Name)
-			log(th, toSend, str, ELF_ENTER)
+			log(th, toSend, str, util.ELF_ENTER)
 
 			if child.Behaviour == util.Good {
 				time.Sleep(time.Duration(3 * len(child.WishList)) * time.Second)
@@ -96,7 +87,7 @@ func elf (id int, toSend *sendToClient, th *util.TimeHandler, childrenList *[]ut
 			ch <- child
 			semStorageRoom.Post()
 			str = fmt.Sprintf("%d;%s", id, child.Name)
-			log(th, toSend, str, ELF_EXIT)
+			log(th, toSend, str, util.ELF_EXIT)
 		} else {
 			mTasks.Unlock()
 			break
@@ -198,11 +189,11 @@ func (santa *WorkshopOperations) Run(req util.Request, res *util.Response) (err 
 	var th util.TimeHandler
 	th.SetStartTime()
 	numOfChildren := len(req.ChildrenList)
-	log(&th, &toSend, strconv.Itoa(numOfChildren), START)
+	log(&th, &toSend, strconv.Itoa(numOfChildren), util.START)
 
 	// if there are no children in the request, just return an empty response
 	if numOfChildren == 0 {
-		log(&th, &toSend, "0", STOP)
+		log(&th, &toSend, "0", util.STOP)
 		return
 	}
 
@@ -224,12 +215,12 @@ func (santa *WorkshopOperations) Run(req util.Request, res *util.Response) (err 
 	}
 	route = append(route, santasWorkshopLocation)
 	str := fmt.Sprintf("%v", route)
-	log(&th, &toSend, str, ROUTE)
+	log(&th, &toSend, str, util.ROUTE)
 	results = <-out
 
 	res.ChildrenList = results
 	res.Route = route
-	log(&th, &toSend, strconv.Itoa(numOfChildren), STOP)
+	log(&th, &toSend, strconv.Itoa(numOfChildren), util.STOP)
 
 	fmt.Println("##################################################")
 

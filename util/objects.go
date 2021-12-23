@@ -42,3 +42,12 @@ type Message struct {
 	Sender  int // Note: the Workshop has a Sender id of 0
 	Message string
 }
+
+type ActionType uint8
+const (
+	START ActionType = iota
+	STOP
+	ELF_ENTER
+	ELF_EXIT
+	ROUTE
+)
