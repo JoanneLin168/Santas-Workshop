@@ -34,6 +34,7 @@ var (
 const (
 	ScreenWidth  = 640
 	ScreenHeight = 480
+	FontSize     = 12
 )
 
 type ElfMovement uint8
@@ -74,6 +75,8 @@ func (e VisElf) drawElf(screen *ebiten.Image) {
 
 // Game implements ebiten.Game interface.
 type Game struct {
+	Children      []util.Child
+	Completed     map[string]bool
 	VisElves      []VisElf
 	VisRoute      string
 	VisQueue      chan Task
@@ -129,8 +132,10 @@ func (g *Game) Update() error {
 			g.Stage = PROCESSING
 		case util.STOP:
 			close(g.VisQueue)
-			g.VisQueue = make(chan Task) // make a new channel so the old channel doesn't send zeroes
 			g.Stage = COMPLETED
+			g.VisQueue = make(chan Task)
+			g.Completed = map[string]bool{}
+			g.Children = []util.Child{}
 		case util.ELF_ENTER:
 			workshopW, workshopH := WorkshopImg.Size()
 			mWorkshop.Lock()
@@ -168,6 +173,7 @@ func (g *Game) Update() error {
 			MVisElves.Lock()
 			g.VisElves[task.Id].Frame = 0
 			g.VisElves[task.Id].Move = EXIT
+			g.Completed[task.Content] = true
 			MVisElves.Unlock()
 		case util.ROUTE:
 			str := task.Content[1:len(task.Content)-1]
@@ -190,6 +196,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	santaImgOp.GeoM.Translate(0, 0)
 	screen.DrawImage(SantaImg, santaImgOp)
 
+	// Text at the top
 	switch g.Stage {
 	case STANDBY:
 		msg := "Press 'Enter' to start up the workshop!"
@@ -217,11 +224,28 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	if len(g.VisRoute) > 0 {
-		_, h := WorkshopImg.Size()
+		_, h := SantaImg.Size()
 		x := 0
-		y := 2 * h
+		y := 2 * h + FontSize
 		msg := " Route:\n "+g.VisRoute
 		text.Draw(screen, msg, Font, x, y, color.White)
+	}
+
+	if g.Stage != STANDBY {
+		w, h := WorkshopImg.Size()
+		x := ScreenWidth - (2 * w)
+		for c := range g.Children {
+			name := (g.Children)[c].Name
+			msg := name+"\n"
+			y := 2 * h + (c+1)*FontSize
+			var msgColor color.Color
+			if _, ok := (g.Completed)[name]; ok {
+				msgColor = color.RGBA{0, 255, 0, 255}
+			} else {
+				msgColor = color.White
+			}
+			text.Draw(screen, msg, Font, x, y, msgColor)
+		}
 	}
 }
 
@@ -249,7 +273,7 @@ func Init() {
 	}
 	const dpi = 72
 	Font, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    12,
+		Size:    FontSize,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})

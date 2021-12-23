@@ -86,12 +86,14 @@ func main() {
 	workshopSpace := []int{-1, -1, -1, -1}
 	start := make(chan bool)
 	game := &c.Game { // Set up game
-		VisElves: []c.VisElf{},
-		VisRoute: "",
-		VisQueue: visQueue,
+		Children:     []util.Child{},
+		Completed:     map[string]bool{},
+		VisElves:      []c.VisElf{},
+		VisRoute:      "",
+		VisQueue:      visQueue,
 		WorkshopSpace: workshopSpace,
-		Start: start,
-		Stage: c.STANDBY,
+		Start:         start,
+		Stage:         c.STANDBY,
 	}
 	ebiten.SetWindowSize(c.ScreenWidth, c.ScreenHeight)
 	ebiten.SetWindowTitle("Santa's Workshop")
@@ -129,6 +131,7 @@ func main() {
 		for {
 			<-start // will start when Enter is pressed
 			children := util.ConvertCSV("input.csv") // by adding it here, means you will use latest version of csv
+			game.Children = children
 			results := []util.Child{}
 			route := []util.Address{}
 			time.Sleep(2 * time.Second)
