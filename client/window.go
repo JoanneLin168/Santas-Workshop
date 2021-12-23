@@ -3,6 +3,13 @@ package client
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
+	"github.com/hajimehoshi/ebiten/v2/text"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
+	"image/color"
+	"log"
+	"strings"
 	"sync"
 	"workshop/util"
 )
@@ -20,6 +27,7 @@ var (
 	SantaImg    *ebiten.Image
 	ElfImg      *ebiten.Image
 	WorkshopImg *ebiten.Image
+	Font        font.Face
 )
 
 const (
@@ -58,8 +66,9 @@ func (e VisElf) drawElf(screen *ebiten.Image) {
 
 // Game implements ebiten.Game interface.
 type Game struct {
-	VisElves []VisElf
-	VisQueue chan Task
+	VisElves      []VisElf
+	VisRoute      string
+	VisQueue      chan Task
 	WorkshopSpace []int
 }
 
@@ -138,6 +147,11 @@ func (g *Game) Update() error {
 			g.VisElves[task.Id].Frame = 0
 			g.VisElves[task.Id].Move = EXIT
 			MVisElves.Unlock()
+		case util.ROUTE:
+			str := task.Content[1:len(task.Content)-1]
+			strSlice := strings.Split(str, "}")
+			route := strings.Join(strSlice, "}\n")
+			g.VisRoute = route
 		}
 	default: // do nothing, stops the function from blocking
 	}
@@ -165,6 +179,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		g.VisElves[e].drawElf(screen)
 		MVisElves.Unlock()
 	}
+
+	if len(g.VisRoute) > 0 {
+		_, h := WorkshopImg.Size()
+		x := 0
+		y := 2 * h
+		msg := "Route:\n"+g.VisRoute
+		text.Draw(screen, msg, Font, x, y, color.White)
+	}
 }
 
 // Layout takes the outside size (e.g., the window size) and returns the (logical) screen size.
@@ -173,8 +195,9 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (sw, sh int) {
 	return ScreenWidth, ScreenHeight
 }
 
-// DecodeImages - decodes the santa and workshop images into ebiten.image types and stores them in the respective variables
-func DecodeImages() {
+// Init - prepares assets
+func Init() {
+	// Images
 	var err error
 	SantaImg, _, err = ebitenutil.NewImageFromFile("sprites/santa.png")
 	util.Check(err)
@@ -182,4 +205,16 @@ func DecodeImages() {
 	util.Check(err)
 	WorkshopImg, _, err = ebitenutil.NewImageFromFile("sprites/workshop.png")
 	util.Check(err)
+
+	// Font
+	tt, err := opentype.Parse(fonts.MPlus1pRegular_ttf)
+	if err != nil {
+		log.Fatal(err)
+	}
+	const dpi = 72
+	Font, err = opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    12,
+		DPI:     dpi,
+		Hinting: font.HintingFull,
+	})
 }

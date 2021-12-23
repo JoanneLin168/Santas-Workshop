@@ -87,7 +87,7 @@ func main() {
 
 	// Set up
 	visQueue := make(chan c.Task, 100)
-	game := &c.Game{[]c.VisElf{}, visQueue,[]int{-1, -1, -1, -1}} // Set up game
+	game := &c.Game{[]c.VisElf{}, "", visQueue,[]int{-1, -1, -1, -1}} // Set up game
 	ebiten.SetWindowSize(c.ScreenWidth, c.ScreenHeight)
 	ebiten.SetWindowTitle("Santa's Workshop")
 
@@ -105,7 +105,7 @@ func main() {
 	id := <-idChan
 
 	children := util.ConvertCSV("input.csv")
-	c.DecodeImages()
+	c.Init()
 
 	// Initialise elves
 	elfW, elfH := c.ElfImg.Size()
