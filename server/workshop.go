@@ -84,10 +84,10 @@ func elf (id int, toSend *sendToClient, th *util.TimeHandler, childrenList *[]ut
 				time.Sleep(1 * time.Second)
 				child.Presents = append(child.Presents, util.Present{Type: util.Coal})
 			}
-			ch <- child
-			semStorageRoom.Post()
 			str = fmt.Sprintf("%d;%s", id, child.Name)
 			log(th, toSend, str, util.ELF_EXIT)
+			ch <- child
+			semStorageRoom.Post()
 		} else {
 			mTasks.Unlock()
 			break

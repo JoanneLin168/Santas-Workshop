@@ -27,16 +27,25 @@ const (
 	ScreenHeight = 480
 )
 
+type ElfMovement uint8
+const (
+	STAND ElfMovement = iota
+	ENTER
+	EXIT
+)
+
 // VisElf - stores the id and the position of an elf sprite
 type VisElf struct {
 	Id     int
+	Frame  int
+	Move   ElfMovement
 	X      float64
 	Y      float64
 	StartX float64
 	StartY float64
-	EndX float64
-	EndY float64
-	Img *ebiten.Image
+	EndX   float64
+	EndY   float64
+	Img    *ebiten.Image
 }
 // drawElf - draws elves
 func (e VisElf) drawElf(screen *ebiten.Image) {
@@ -54,10 +63,40 @@ type Game struct {
 	WorkshopSpace []int
 }
 
+// updateElvesPos - updates the position of the elves every time Update() is called
+func (g *Game) updateElvesPos() {
+	MVisElves.Lock()
+	for i := range g.VisElves {
+		if g.VisElves[i].Frame < 30 && g.VisElves[i].Move == ENTER {
+			g.VisElves[i].X += (g.VisElves[i].EndX - g.VisElves[i].StartX) / 30
+			g.VisElves[i].Y += (g.VisElves[i].EndY - g.VisElves[i].StartY) / 30
+			g.VisElves[i].Frame += 1
+		} else if g.VisElves[i].Frame < 30 && g.VisElves[i].Move == EXIT {
+			g.VisElves[i].X += (g.VisElves[i].StartX - g.VisElves[i].EndX) / 30
+			g.VisElves[i].Y += (g.VisElves[i].StartY - g.VisElves[i].EndY) / 30
+			g.VisElves[i].Frame += 1
+		} else if g.VisElves[i].Move == ENTER {
+			g.VisElves[i].X = g.VisElves[i].EndX
+			g.VisElves[i].Y = g.VisElves[i].EndY
+			g.VisElves[i].Frame = 0
+			g.VisElves[i].Move = STAND
+		} else if g.VisElves[i].Move == EXIT {
+			g.VisElves[i].X = g.VisElves[i].StartX
+			g.VisElves[i].Y = g.VisElves[i].StartY
+			g.VisElves[i].Frame = 0
+			g.VisElves[i].Move = STAND
+		}
+	}
+	MVisElves.Unlock()
+}
+
 // Update proceeds the game state.
 // Update is called every tick (1/60 [s] by default).
 func (g *Game) Update() error {
 	// Write your game's logical update.
+
+	g.updateElvesPos() // update positions of elves
+
 	select {
 	case task := <-g.VisQueue: // upon receiving a task, update visualisation
 		switch task.Action {
@@ -69,31 +108,35 @@ func (g *Game) Update() error {
 					g.WorkshopSpace[s] = task.Id
 					MVisElves.Lock()
 					if (s+1) % 2 == 0 { // if even, go to right
-						g.VisElves[task.Id].X = float64(ScreenWidth-workshopW) // half of workshopW size (don't forget it is 2x scaled)
+						g.VisElves[task.Id].EndX = float64(ScreenWidth-workshopW) // half of workshopW size (don't forget it is 2x scaled)
 					} else {
-						g.VisElves[task.Id].X = float64(ScreenWidth-2*workshopW)
+						g.VisElves[task.Id].EndX = float64(ScreenWidth-2*workshopW)
 					}
 					if s+1 > 2 { // if > 2, go to bottom
-						g.VisElves[task.Id].Y = float64(workshopH) // half of workshopH size (don't forget it is 2x scaled)
+						g.VisElves[task.Id].EndY = float64(workshopH) // half of workshopH size (don't forget it is 2x scaled)
 					} else {
-						g.VisElves[task.Id].Y = float64(0)
+						g.VisElves[task.Id].EndY = float64(0)
 					}
+					g.VisElves[task.Id].Frame = 0
+					g.VisElves[task.Id].Move = ENTER
 					MVisElves.Unlock()
 					break
 				}
 			}
 			mWorkshop.Unlock()
+
 		case util.ELF_EXIT:
 			mWorkshop.Lock()
 			for s := range g.WorkshopSpace {
 				if g.WorkshopSpace[s] == task.Id {
 					g.WorkshopSpace[s] = -1
+					break
 				}
 			}
 			mWorkshop.Unlock()
 			MVisElves.Lock()
-			g.VisElves[task.Id].X = g.VisElves[task.Id].StartX
-			g.VisElves[task.Id].Y = g.VisElves[task.Id].StartY
+			g.VisElves[task.Id].Frame = 0
+			g.VisElves[task.Id].Move = EXIT
 			MVisElves.Unlock()
 		}
 	default: // do nothing, stops the function from blocking
@@ -117,10 +160,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	workshopImgOp.GeoM.Translate(float64(ScreenWidth-2*workshopW), 0)
 	screen.DrawImage(WorkshopImg, workshopImgOp)
 
-	for i := 0; i < 8; i++ {
+	for e := range g.VisElves {
 		MVisElves.Lock()
-		elf := g.VisElves[i]
-		elf.drawElf(screen)
+		g.VisElves[e].drawElf(screen)
 		MVisElves.Unlock()
 	}
 }
@@ -136,10 +178,8 @@ func DecodeImages() {
 	var err error
 	SantaImg, _, err = ebitenutil.NewImageFromFile("sprites/santa.png")
 	util.Check(err)
-
 	ElfImg, _, err = ebitenutil.NewImageFromFile("sprites/elf_0.png") // used only for the size
 	util.Check(err)
-
 	WorkshopImg, _, err = ebitenutil.NewImageFromFile("sprites/workshop.png")
 	util.Check(err)
 }

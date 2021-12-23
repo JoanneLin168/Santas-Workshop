@@ -115,7 +115,7 @@ func main() {
 		img, _, err := ebitenutil.NewImageFromFile("sprites/elf_"+strconv.Itoa(i)+".png")
 		util.Check(err)
 		c.MVisElves.Lock()
-		elf := c.VisElf{i, x, y, x, y, x, y, img}
+		elf := c.VisElf{i, 0, c.STAND, x, y, x, y, x, y, img}
 		game.VisElves = append(game.VisElves, elf)
 		c.MVisElves.Unlock()
 	}
