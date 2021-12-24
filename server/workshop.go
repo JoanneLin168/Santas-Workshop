@@ -200,7 +200,6 @@ func (santa *WorkshopOperations) Run(req util.Request, res *util.Response) (err 
 	out := make(chan []util.Child)
 	path := []util.Child{}
 	pathCalculated := make(chan bool)
-	santasWorkshopLocation := util.Address{"Santa", 0, 0}
 	results := []util.Child{}
 	children := make([]util.Child, len(req.ChildrenList))
 	copy(children, req.ChildrenList)
@@ -209,11 +208,11 @@ func (santa *WorkshopOperations) Run(req util.Request, res *util.Response) (err 
 	go calculatePath(req.ChildrenList, &path, &util.Address{"Santa", 0, 0}, pathCalculated)
 
 	<-pathCalculated
-	route := []util.Address{santasWorkshopLocation} // Note: path stores the children, route stores the addresses
+	route := []util.Address{util.SantaAddr} // Note: path stores the children, route stores the addresses
 	for c := range path {
 		route = append(route, path[c].Address)
 	}
-	route = append(route, santasWorkshopLocation)
+	route = append(route, util.SantaAddr)
 	str := fmt.Sprintf("%v", route)
 	log(&th, &toSend, str, util.ROUTE)
 	results = <-out
@@ -240,7 +239,8 @@ func handleClient(client net.Conn, clientid int, msgs chan util.Message, disconn
 		msgSlice := strings.Split(msg, ":")
 		message := msgSlice[1]
 		msgs <- util.Message{Sender: clientid, Message: message}
-		if message == "CLOSE" {
+		if message == "CLOSE" { // currently disconnects the io reader, TODO: disconnect the RPC as well
+			disconnect <- clientid
 			break
 		}
 	}

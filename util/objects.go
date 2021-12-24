@@ -51,3 +51,6 @@ const (
 	ELF_EXIT
 	ROUTE
 )
+
+
+var SantaAddr = Address{"Santa", 0, 0}

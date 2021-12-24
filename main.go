@@ -86,10 +86,12 @@ func main() {
 	workshopSpace := []int{-1, -1, -1, -1}
 	start := make(chan bool)
 	game := &c.Game { // Set up game
-		Children:     []util.Child{},
+		Children:      []util.Child{},
 		Completed:     map[string]bool{},
-		VisElves:      []c.VisElf{},
-		VisRoute:      "",
+		VisSanta:      c.VisSprite{},
+		VisElves:      []c.VisSprite{},
+		Addresses:     []util.Address{},
+		Route:         []util.Address{},
 		VisQueue:      visQueue,
 		WorkshopSpace: workshopSpace,
 		Start:         start,
@@ -121,10 +123,14 @@ func main() {
 		img, _, err := ebitenutil.NewImageFromFile("sprites/elf_"+strconv.Itoa(i)+".png")
 		util.Check(err)
 		c.MVisElves.Lock()
-		elf := c.VisElf{i, 0, c.STAND, x, y, x, y, x, y, img}
+		elf := c.VisSprite{i, 0, c.STAND, x, y, x, y, x, y, img}
 		game.VisElves = append(game.VisElves, elf)
 		c.MVisElves.Unlock()
 	}
+	// Initialise santa
+	x := float64(0)
+	y := float64(0)
+	game.VisSanta = c.VisSprite{0, 0, c.STAND, x, y, x, y, x, y, c.SantaImg}
 
 	// RPC dial to server
 	go func() {
