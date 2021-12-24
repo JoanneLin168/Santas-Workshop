@@ -370,31 +370,30 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	// Draw Santa on top of map
 	g.VisSanta.drawSanta(screen)
 
+	// Draw out list of children
+	listX := 0
+	listY := int(OriginY - 2*length/3)
+	text.Draw(screen, "LIST OF CHILDREN:", Font, listX, listY, color.White)
 	if g.Stage != STANDBY {
-		_, h := WorkshopImg.Size()
-		x := 0
 		for c := range g.Children {
 			name := (g.Children)[c].Name
 			msg := name+"\n"
-			y := 2 * h + (c+1)*FontSize
+			y := listY + (c+1)*FontSize
 			var msgColor color.Color
 			if _, ok := (g.Completed)[name]; ok {
 				msgColor = color.RGBA{0, 255, 0, 255}
 			} else {
 				msgColor = color.White
 			}
-			text.Draw(screen, msg, Font, x, y, msgColor)
+			text.Draw(screen, msg, Font, listX, y, msgColor)
 		}
 	}
 
 	// Log of what is happening
-	w, _ := SantaImg.Size()
-	x := 2*w
-	y := FontSize
-	text.Draw(screen, "LOG:", Font, x, FontSize, color.White)
+	text.Draw(screen, "LOG:", Font, 0, FontSize, color.White)
 	for i := range g.Log {
 		msg := g.Log[i]
-		text.Draw(screen, msg, Font, x, y+(i+1)*FontSize, color.White)
+		text.Draw(screen, msg, Font, 0, FontSize+(i+1)*FontSize, color.White)
 	}
 }
 
