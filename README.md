@@ -7,14 +7,14 @@ This is a project to simulate Santa and his elves preparing the presents for chi
 This project is written in Golang and uses the [Ebiten library](https://github.com/hajimehoshi/ebiten) for the visualisation,
 and Chris Gora's [semaphore](https://github.com/ChrisGora/semaphore) library.
 
-The following were used in this project:
-- Multithreading (to simulate the elves)
+## Demonstration ##
+Watch the demonstration on [Youtube](https://youtu.be/RYMBpJ0iSx8) to see it working!
+
+## Techniques Implemented ##
+- Multi-threading (to simulate the elves)
 - Remote Procedure Calls (RPC) (to send the list of children to Santa's Workshop)
 - Mutex locks (to prevent any race conditions)
 - Semaphores (to simulate the maximum number of elves in the storage room)
-
-Watch this to see it working!
-<iframe width="560" height="315" src="https://youtu.be/RYMBpJ0iSx8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe> 
 
 ## How to Run ##
 Currently there is no server set up, so you will need to run the server locally.
