@@ -36,3 +36,21 @@ type Child struct {
 	WishList  []Present
 	Presents  []Present
 }
+
+// Message - used to send the state of the simulation to the client, and client can send back a confirmation
+type Message struct {
+	Sender  int // Note: the Workshop has a Sender id of 0
+	Message string
+}
+
+type ActionType uint8
+const (
+	START ActionType = iota
+	STOP
+	ELF_ENTER
+	ELF_EXIT
+	ROUTE
+)
+
+
+var SantaAddr = Address{"Santa", 0, 0}

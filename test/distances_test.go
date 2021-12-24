@@ -24,7 +24,7 @@ func TestDistances(t *testing.T) {
 			children := testSets[i]
 			results := []util.Child{}
 			route := []util.Address{}
-			client.Run(c, children, &results, &route)
+			client.Run(0, c, children, &results, &route)
 
 			// Note: +2 is for Santa start and Santa end
 			switch i {
